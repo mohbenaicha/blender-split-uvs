@@ -7,8 +7,6 @@ table can be inspected without a scene.
 
 from dataclasses import dataclass
 
-from .bake_nodes import separate_channel
-
 EMIT = 'EMIT'
 NORMAL = 'NORMAL'
 
@@ -20,22 +18,12 @@ class BakePass:
     key: str
     label: str
     bake_type: str
-    channel: str | None  # None = pass needs no emission wiring
+    channel: str | None  # None = emit the whole RGB value
     is_data: bool  # True -> Non-Color; False -> sRGB
 
     @property
     def colorspace(self) -> str:
         return "Non-Color" if self.is_data else "sRGB"
-
-    def wire(self, material, node_tree, source_image) -> None:
-        """Point the material at the value this pass should write.
-
-        Only EMIT passes rewire anything: Cycles evaluates the shader's normal
-        input for a NORMAL bake, so normal maps need no help.
-        """
-        if self.bake_type != EMIT:
-            return
-        separate_channel(node_tree, material, source_image, self.channel)
 
 
 BASE_COLOR = BakePass("basecolor", "Base Color", EMIT, None, is_data=False)

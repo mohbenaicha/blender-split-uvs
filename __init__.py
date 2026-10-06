@@ -83,6 +83,14 @@ class UVRepackSettings(bpy.types.PropertyGroup):
         min=0,
         max=64,
     )
+    keep_bake_passes: BoolProperty(
+        name="Keep Pass Textures",
+        description=(
+            "Also keep the temporary ORM channel bakes instead of only the merged "
+            "image. Uses four times the texture memory; for debugging only"
+        ),
+        default=False,
+    )
 
 
 CLASSES = (UVRepackSettings,)

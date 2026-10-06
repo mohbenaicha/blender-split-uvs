@@ -24,16 +24,17 @@ class UVREPACK_PT_panel(bpy.types.Panel):
         layout.label(text=f"Targets: {selection.describe(len(targets))}", icon='MESH_DATA')
 
         column = layout.column(align=True)
-        column.scale_y = 1.4
-        column.operator("uv_repack.repack", icon='UV')
+        column.scale_y = 1.6
+        column.operator("uv_repack.repack_and_bake", icon='RENDER_STILL')
 
         bake = layout.box()
-        bake.label(text="Bake Textures", icon='TEXTURE')
+        bake.label(text="Textures", icon='TEXTURE')
         bake.prop(settings, "bake_resolution", text="")
         bake.prop(settings, "bake_margin")
-        bake.operator("uv_repack.bake", icon='RENDER_STILL')
 
         row = layout.row(align=True)
+        row.operator("uv_repack.repack", icon='UV')
+        row.operator("uv_repack.bake", icon='IMAGE_DATA')
         row.operator("uv_repack.report", icon='INFO')
         row.prop(settings, "show_settings", text="", icon='PREFERENCES')
 
@@ -45,6 +46,7 @@ class UVREPACK_PT_panel(bpy.types.Panel):
                 box.prop(settings, "converged_delta")
             box.prop(settings, "margin")
             box.prop(settings, "make_single_user")
+            box.prop(settings, "keep_bake_passes")
 
 
 CLASSES = (UVREPACK_PT_panel,)

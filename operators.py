@@ -87,7 +87,7 @@ class UVREPACK_OT_report(bpy.types.Operator):
 
 
 class UVREPACK_OT_bake(bpy.types.Operator):
-    """Bake the original textures through the packed UVs, one texture per object"""
+    """Bake the original textures through the packed UVs into one texture per object"""
 
     bl_idname = "uv_repack.bake"
     bl_label = "Bake Textures"
@@ -98,11 +98,36 @@ class UVREPACK_OT_bake(bpy.types.Operator):
         return bool(selection.selected_meshes())
 
     def execute(self, context):
-        from .bake import BakeReport, bake_object, bake_objects
-        from .bake_nodes import source_image_of
-        from .islands import islands_from_mesh
-        from .nodes import recommended_resolution
-        from .repack import uv_coverage
+        targets = selection.selected_meshes()
+        if not targets:
+            self.report({'ERROR'}, "Select at least one mesh object")
+            return {'CANCELLED'}
+        report = _run_bake(targets, context.scene.uv_repack)
+        if isinstance(report, str):
+            self.report({'ERROR'}, report)
+            return {'CANCELLED'}
+        self.report({'INFO'}, report.summary())
+        return {'FINISHED'}
+
+
+class UVREPACK_OT_repack_and_bake(bpy.types.Operator):
+    """Repack UVs and bake the textures in one step, leaving the mesh looking unchanged.
+
+    Repacking alone invalidates the texture, so the two belong together: this
+    operator repacks, bakes the atlas through the new UVs, and wires the baked
+    images back into the object's materials.
+    """
+
+    bl_idname = "uv_repack.repack_and_bake"
+    bl_label = "Repack UVs + Bake"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(selection.selected_meshes())
+
+    def execute(self, context):
+        from .api import repack
 
         targets = selection.selected_meshes()
         if not targets:
@@ -110,31 +135,74 @@ class UVREPACK_OT_bake(bpy.types.Operator):
             return {'CANCELLED'}
 
         settings = context.scene.uv_repack
-        try:
-            if settings.bake_resolution == 'AUTO':
-                # Size each object to keep the texel density it already had.
-                atlas = _atlas_size(targets, source_image_of)
-                outcomes = []
-                for target in targets:
-                    coverage = uv_coverage(islands_from_mesh(target.data))
-                    size = recommended_resolution(coverage, atlas)
-                    outcomes.append(bake_object(target, size, settings.bake_margin))
-                report = BakeReport(tuple(outcomes))
-            else:
-                report = bake_objects(
-                    targets, int(settings.bake_resolution), settings.bake_margin
+        if settings.make_single_user and len({ob.data.name for ob in targets}) != len(targets):
+            overrides = {"object": targets[0], "selected_editable_objects": targets}
+            with context.temp_override(**overrides):
+                bpy.ops.object.make_single_user(
+                    type='SELECTED_OBJECTS', object=True, obdata=True
                 )
+
+        # Capture the coverage BEFORE repacking: it is what sizes the bakes.
+        coverage_before = _coverage_map(targets)
+        skip_policy = (
+            SkipPolicy(settings.threshold, settings.converged_delta)
+            if settings.skip_packed
+            else None
+        )
+        try:
+            repack(targets, settings.margin, skip_policy)
         except ValueError as error:
             self.report({'ERROR'}, str(error))
             return {'CANCELLED'}
 
-        if report.failures:
-            first = report.failures[0]
-            self.report({'ERROR'}, f"{first.name}: {first.error}")
+        report = _run_bake(targets, settings, coverage_before)
+        if isinstance(report, str):
+            self.report({'ERROR'}, report)
             return {'CANCELLED'}
 
         self.report({'INFO'}, report.summary())
         return {'FINISHED'}
+
+
+def _coverage_map(targets) -> dict:
+    """UV coverage of each mesh, keyed by mesh datablock name, before repacking."""
+    from .islands import islands_from_mesh
+    from .repack import uv_coverage
+
+    return {ob.data.name: uv_coverage(islands_from_mesh(ob.data)) for ob in targets}
+
+
+def _run_bake(targets, settings, coverage_before: dict | None = None):
+    """Bake every target, sizing from the pre-repack atlas share when asked.
+
+    Returns a BakeReport, or a string describing why it could not run.
+    """
+    from .bake import BakeReport, bake_object, bake_objects
+    from .bake_nodes import source_image_of
+    from .islands import islands_from_mesh
+    from .nodes import recommended_resolution
+    from .repack import uv_coverage
+
+    try:
+        if settings.bake_resolution != 'AUTO':
+            return bake_objects(targets, int(settings.bake_resolution), settings.bake_margin)
+
+        atlas = _atlas_size(targets, source_image_of)
+        if coverage_before is None:
+            coverage_before = _coverage_map(targets)
+
+        outcomes = []
+        for target in targets:
+            # Fall back to current coverage only if the mesh was not measured
+            # before repacking, which would understate how much detail it owned.
+            coverage = coverage_before.get(
+                target.data.name, uv_coverage(islands_from_mesh(target.data))
+            )
+            size = recommended_resolution(coverage, atlas)
+            outcomes.append(bake_object(target, size, settings.bake_margin))
+        return BakeReport(tuple(outcomes))
+    except ValueError as error:
+        return str(error)
 
 
 def _atlas_size(targets, source_image_of) -> tuple[int, int]:
@@ -149,4 +217,9 @@ def _atlas_size(targets, source_image_of) -> tuple[int, int]:
     return (2048, 2048)
 
 
-CLASSES = (UVREPACK_OT_repack, UVREPACK_OT_report, UVREPACK_OT_bake)
+CLASSES = (
+    UVREPACK_OT_repack,
+    UVREPACK_OT_report,
+    UVREPACK_OT_bake,
+    UVREPACK_OT_repack_and_bake,
+)

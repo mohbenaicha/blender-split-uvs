@@ -8,6 +8,46 @@ from .islands import Island, islands_from_mesh
 from .metrics import polygons_area
 
 
+# Repacking overwrites the UV layer, but a bake still has to know where each
+# surface point sits in the ORIGINAL atlas. That mapping is preserved under this
+# name before packing, and the bake's source image nodes read from it.
+SOURCE_UV_LAYER = "UVRepack_Original"
+
+
+def ensure_source_uv_layer(mesh) -> str | None:
+    """Guarantee a UV layer holding the pre-repack atlas mapping.
+
+    Returns the layer's name, or None when the mesh has no UVs at all.
+
+    On a first run the active layer is duplicated under `SOURCE_UV_LAYER` so the
+    mapping survives. On later runs that copy is left alone -- re-copying the
+    packed UVs over it would destroy the very mapping it exists to protect.
+    """
+    if mesh.uv_layers.get(SOURCE_UV_LAYER) is not None:
+        return SOURCE_UV_LAYER
+    if mesh.uv_layers.active is None:
+        return None
+    # Blender would rename a duplicate to avoid the clash, so give the active
+    # layer a temporary name first.
+    mesh.uv_layers.active.name = "UVRepack_Packed_tmp"
+    copied = mesh.uv_layers.new(name=SOURCE_UV_LAYER, do_init=True)
+    if copied is None:
+        return None
+    return copied.name
+
+
+def packed_uv_layer(mesh) -> str | None:
+    """The layer a bake should write into: the active one, unless it is the backup."""
+    active = mesh.uv_layers.active
+    if active is None:
+        return None
+    if active.name == SOURCE_UV_LAYER and len(mesh.uv_layers) > 1:
+        return next(
+            (l.name for l in mesh.uv_layers if l.name != SOURCE_UV_LAYER), None
+        )
+    return active.name
+
+
 @dataclass(frozen=True)
 class MeshOutcome:
     """What happened to a single mesh."""
@@ -156,6 +196,10 @@ def pack_uv_islands(
                 other.select_set(False)
         target.select_set(True)
         view_layer.objects.active = target
+
+        # Capture the atlas mapping before anything moves, so a later bake can
+        # still read the source texture at the right coordinates.
+        ensure_source_uv_layer(target.data)
 
         was_edit = target.mode == 'EDIT'
         try:
