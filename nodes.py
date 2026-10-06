@@ -120,15 +120,21 @@ def bake_size_guard(resolution: int, object_count: int) -> int:
     return per_image * 2 * object_count
 
 
-def recommended_resolution(uv_coverage: float, atlas_resolution: int) -> int:
-    """Smallest power of two that preserves an object's existing texel density.
+def recommended_resolution(uv_coverage: float, atlas_size: tuple[int, int]) -> int:
+    """Smallest power-of-two texture that holds as many pixels as the object owned.
 
-    An object holding `c` of the atlas owns `c * atlas^2` texels. A square image
-    of side `atlas * sqrt(c)` holds the same count, so nothing is lost and
-    smaller objects stop paying for space they never used.
+    An object covering `c` of the atlas owned `c * atlas_width * atlas_height`
+    pixels. This returns the smallest square power-of-two texture with at least
+    that many pixels, so the object keeps the detail it already had and stops
+    paying for atlas space it never used.
+
+    A square texture is returned even for a non-square atlas, because the packed
+    UV layout is square: it fills a 0-1 tile in both axes.
     """
-    exact = atlas_resolution * (max(uv_coverage, 0.0) ** 0.5)
-    size = 64
-    while size < exact:
+    atlas_pixels = max(atlas_size[0], 1) * max(atlas_size[1], 1)
+    wanted = max(uv_coverage, 0.0) * atlas_pixels
+
+    size = 16
+    while size * size < wanted:
         size *= 2
-    return max(64, min(size, 8192))
+    return size

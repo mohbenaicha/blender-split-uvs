@@ -82,11 +82,11 @@ def main() -> int:
         [slot.material.name if slot.material else None for slot in ob.material_slots]
         for ob in targets
     ]
-    atlas_resolution = atlas.size[0] if atlas is not None else 2048
+    atlas_size = (atlas.size[0], atlas.size[1]) if atlas is not None else (2048, 2048)
     for ob, coverage in zip(targets, before_coverage):
         print(
             f"  SOURCE {ob.name} coverage={coverage * 100:.2f}% "
-            f"recommended={recommended_resolution(coverage, atlas_resolution)}px "
+            f"recommended={recommended_resolution(coverage, atlas_size)}px "
             f"polys={len(ob.data.polygons)}"
         )
 

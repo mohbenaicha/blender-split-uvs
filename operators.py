@@ -113,7 +113,7 @@ class UVREPACK_OT_bake(bpy.types.Operator):
         try:
             if settings.bake_resolution == 'AUTO':
                 # Size each object to keep the texel density it already had.
-                atlas = _atlas_resolution(targets, source_image_of)
+                atlas = _atlas_size(targets, source_image_of)
                 outcomes = []
                 for target in targets:
                     coverage = uv_coverage(islands_from_mesh(target.data))
@@ -137,16 +137,16 @@ class UVREPACK_OT_bake(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def _atlas_resolution(targets, source_image_of) -> int:
-    """Pixel size of the atlas being resampled, used to size the outputs."""
+def _atlas_size(targets, source_image_of) -> tuple[int, int]:
+    """Pixel dimensions of the atlas being resampled, used to size the outputs."""
     for target in targets:
         for slot in target.material_slots:
             if slot.material is None:
                 continue
             image = source_image_of(slot.material)
             if image is not None and image.size[0] > 0:
-                return image.size[0]
-    return 2048
+                return (image.size[0], image.size[1])
+    return (2048, 2048)
 
 
 CLASSES = (UVREPACK_OT_repack, UVREPACK_OT_report, UVREPACK_OT_bake)
