@@ -7,7 +7,7 @@ Select a mesh, open the **N** panel sidebar, and click **Repack UVs** under the
 leaving other objects untouched.
 
 **Bake Textures** resamples your existing maps (colour, normal, ORM) through the
-new UVs, sized to keep each object's texel density.
+new UVs, preserving each object's texel density.
 
 Workflow: split your model (`Mesh > Separate > By Loose Parts`), select an object,
 click **Repack UVs**, then **Bake Textures**.
