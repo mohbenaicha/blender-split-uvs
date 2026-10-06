@@ -86,4 +86,67 @@ class UVREPACK_OT_report(bpy.types.Operator):
         return {'FINISHED'}
 
 
-CLASSES = (UVREPACK_OT_repack, UVREPACK_OT_report)
+class UVREPACK_OT_bake(bpy.types.Operator):
+    """Bake the original textures through the packed UVs, one texture per object"""
+
+    bl_idname = "uv_repack.bake"
+    bl_label = "Bake Textures"
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(selection.selected_meshes())
+
+    def execute(self, context):
+        from .bake import BakeReport, bake_object, bake_objects
+        from .bake_nodes import source_image_of
+        from .islands import islands_from_mesh
+        from .nodes import recommended_resolution
+        from .repack import uv_coverage
+
+        targets = selection.selected_meshes()
+        if not targets:
+            self.report({'ERROR'}, "Select at least one mesh object")
+            return {'CANCELLED'}
+
+        settings = context.scene.uv_repack
+        try:
+            if settings.bake_resolution == 'AUTO':
+                # Size each object to keep the texel density it already had.
+                atlas = _atlas_resolution(targets, source_image_of)
+                outcomes = []
+                for target in targets:
+                    coverage = uv_coverage(islands_from_mesh(target.data))
+                    size = recommended_resolution(coverage, atlas)
+                    outcomes.append(bake_object(target, size, settings.bake_margin))
+                report = BakeReport(tuple(outcomes))
+            else:
+                report = bake_objects(
+                    targets, int(settings.bake_resolution), settings.bake_margin
+                )
+        except ValueError as error:
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+
+        if report.failures:
+            first = report.failures[0]
+            self.report({'ERROR'}, f"{first.name}: {first.error}")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, report.summary())
+        return {'FINISHED'}
+
+
+def _atlas_resolution(targets, source_image_of) -> int:
+    """Pixel size of the atlas being resampled, used to size the outputs."""
+    for target in targets:
+        for slot in target.material_slots:
+            if slot.material is None:
+                continue
+            image = source_image_of(slot.material)
+            if image is not None and image.size[0] > 0:
+                return image.size[0]
+    return 2048
+
+
+CLASSES = (UVREPACK_OT_repack, UVREPACK_OT_report, UVREPACK_OT_bake)

@@ -9,7 +9,7 @@ bl_info = {
 }
 
 import bpy
-from bpy.props import BoolProperty, FloatProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty
 
 from . import operators, panel
 
@@ -63,6 +63,25 @@ class UVRepackSettings(bpy.types.PropertyGroup):
         name="Settings",
         description="Show packing settings",
         default=False,
+    )
+    bake_resolution: EnumProperty(
+        name="Texture Size",
+        description="Resolution of the texture baked for each object",
+        items=(
+            ('256', "256 x 256", "Smallest; only for tiny fragments"),
+            ('512', "512 x 512", "Loses detail on objects using over 6% of the atlas"),
+            ('1024', "1024 x 1024", "Fits objects using up to 25% of the atlas"),
+            ('2048', "2048 x 2048", "Preserves everything the atlas had"),
+            ('AUTO', "Auto per Object", "Size each object to keep its current texel density"),
+        ),
+        default='AUTO',
+    )
+    bake_margin: IntProperty(
+        name="Bake Margin",
+        description="Padding around each island in pixels; too small causes seams",
+        default=8,
+        min=0,
+        max=64,
     )
 
 

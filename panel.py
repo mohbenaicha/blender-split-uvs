@@ -27,6 +27,12 @@ class UVREPACK_PT_panel(bpy.types.Panel):
         column.scale_y = 1.4
         column.operator("uv_repack.repack", icon='UV')
 
+        bake = layout.box()
+        bake.label(text="Bake Textures", icon='TEXTURE')
+        bake.prop(settings, "bake_resolution", text="")
+        bake.prop(settings, "bake_margin")
+        bake.operator("uv_repack.bake", icon='RENDER_STILL')
+
         row = layout.row(align=True)
         row.operator("uv_repack.report", icon='INFO')
         row.prop(settings, "show_settings", text="", icon='PREFERENCES')
